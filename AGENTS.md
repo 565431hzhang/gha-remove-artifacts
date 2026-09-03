@@ -14,7 +14,7 @@ pnpm run build
 
 ### Release
 
-Consumers reference the action by tag: `@v1` (moving major tag) or `@v1.x.y`. The `dist/` bundle is committed and rebuilt by the Build workflow on every push to `main`, so make sure CI is green on `main` before tagging.
+Consumers reference the action by tag: `@v1` (moving major tag) or `@v1.x.y`.
 
 1. Bump `version` in `package.json`, commit and push to `main`. Wait for all workflows to pass.
 2. Tag the release and move the major tag to the same commit:

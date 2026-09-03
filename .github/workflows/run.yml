@@ -8,16 +8,6 @@ jobs:
     timeout-minutes: 10
     steps:
     - uses: actions/checkout@v4
-    - uses: pnpm/action-setup@v4
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version-file: .tool-versions
-        cache: pnpm
-    - name: Install JS dependencies
-      run: pnpm install --frozen-lockfile
-    - name: Build
-      run: pnpm run build
     - name: Run action
       uses: ./
       with:

@@ -1,9 +1,6 @@
 name: Build
 
-on:
-  push:
-    branches:
-      - main
+on: [push]
 
 jobs:
   build:
@@ -21,8 +18,5 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build
         run: pnpm run build
-      - name: Commit and push distified version to main
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: 'Update distified version'
-          file_pattern: 'dist/'
+      - name: Check that dist/ is up to date
+        run: git diff HEAD --exit-code -- dist/ || (echo "dist/ is out of date, run 'pnpm run build' and commit the result" && exit 1)
