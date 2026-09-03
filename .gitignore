@@ -13,3 +13,6 @@
 
 # Environment variables
 .env
+
+# Personal Claude Code instructions
+CLAUDE.local.md
