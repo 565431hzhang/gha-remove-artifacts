@@ -8,7 +8,7 @@ Status and support
 - &#x2714; supported
 - &#x2716; no ongoing development
 
-GitHub Action Artifacts are removed after [90 days](https://github.community/t5/GitHub-Actions/Managing-Actions-storage-space/m-p/41424/highlight/true#M4618) by default. [GitHub now supports changing this setting](https://github.blog/changelog/2020-10-08-github-actions-ability-to-change-retention-days-for-artifacts-and-logs/). This action allows you to further customize the cleanup. It
+GitHub Action Artifacts are removed after [90 days by default](https://docs.github.com/en/organizations/managing-organization-settings/configuring-the-retention-period-for-github-actions-artifacts-and-logs-in-your-organization), and the retention period is configurable. This action allows you to further customize the cleanup. It
 - removes artifacts that are older than the specified age
 - has the option to keep release (tagged) artifacts
 - has the option to keep a number of recent artifacts

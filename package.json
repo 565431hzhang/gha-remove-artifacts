@@ -6,13 +6,11 @@
   "scripts": {
     "build": "ncc build index.js --minify",
     "dev": "cross-env NODE_ENV=dev node ./index.js",
-    "test": "echo 'No test framework configured'",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },
   "pre-commit": [
-    "lint",
-    "test"
+    "lint"
   ],
   "keywords": [
     "github",

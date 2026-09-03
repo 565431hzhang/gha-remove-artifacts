@@ -1,6 +1,6 @@
 name: 'Remove artifacts'
 author: 'c-hive'
-description: ''
+description: 'Remove old artifacts, optionally keeping release (tagged) artifacts and a number of recent ones.'
 runs:
   using: 'node24'
   main: 'dist/index.js'
