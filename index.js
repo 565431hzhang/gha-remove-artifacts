@@ -131,100 +131,70 @@ async function run() {
     }
   }
 
-  let skippedArtifactsCounter = 0;
+  const artifacts = await octokit.paginate(
+    octokit.rest.actions.listArtifactsForRepo,
+    {
+      ...configs.repo,
+      per_page: configs.pagination.perPage,
+    }
+  );
 
-  return octokit
-    .paginate(
-      octokit.rest.actions.listWorkflowRunsForRepo,
-      {
-        ...configs.repo,
-        per_page: configs.pagination.perPage,
-      },
-      ({ data }, done) => {
-        const stopPagination = data.find((workflowRun) => {
-          const createdAt = moment(workflowRun.created_at);
+  let skippedRecentCounter = 0;
+  let removedCounter = 0;
 
-          return createdAt.isBefore(moment.utc().subtract(90, "days"));
-        });
+  // Artifacts are listed newest first.
+  for (const artifact of artifacts) {
+    if (artifact.expired) {
+      continue;
+    }
 
-        if (stopPagination) {
-          done();
-        }
+    const headSha = artifact.workflow_run?.head_sha;
 
-        return data;
-      }
-    )
-    .then((workflowRuns) => {
-      const artifactPromises = workflowRuns
-        .filter((workflowRun) => {
-          const skipTaggedWorkflow =
-            configs.skipTags && taggedCommits.includes(workflowRun.head_sha);
-
-          if (skipTaggedWorkflow) {
-            console.log(`Skipping tagged run ${workflowRun.head_sha}`);
-
-            return false;
-          }
-
-          return true;
-        })
-        .map((workflowRun) =>
-          octokit
-            .paginate(octokit.rest.actions.listWorkflowRunArtifacts, {
-              ...configs.repo,
-              per_page: configs.pagination.perPage,
-              run_id: workflowRun.id,
-            })
-            .then((artifacts) =>
-              artifacts
-                .filter((artifact) => {
-                  const skipRecentArtifact =
-                    configs.skipRecent &&
-                    configs.skipRecent > skippedArtifactsCounter;
-
-                  if (skipRecentArtifact) {
-                    console.log(
-                      `Skipping recent artifact (id: ${artifact.id}, name: ${artifact.name}).`
-                    );
-
-                    skippedArtifactsCounter += 1;
-
-                    return false;
-                  }
-
-                  const createdAt = moment(artifact.created_at);
-
-                  return createdAt.isBefore(configs.maxAge);
-                })
-                .map((artifact) => {
-                  if (devEnv) {
-                    return new Promise((resolve) => {
-                      console.log(
-                        `Recognized development environment, preventing artifact (id: ${artifact.id}, name: ${artifact.name}) from being removed.`
-                      );
-
-                      resolve();
-                    });
-                  }
-
-                  return octokit.rest.actions
-                    .deleteArtifact({
-                      ...configs.repo,
-                      artifact_id: artifact.id,
-                    })
-                    .then(() => {
-                      console.log(
-                        `Successfully removed artifact (id: ${artifact.id}, name: ${artifact.name}).`
-                      );
-                    });
-                })
-            )
-        );
-
-      return Promise.all(artifactPromises).then((artifactDeletePromises) =>
-        Promise.all([].concat(...artifactDeletePromises))
+    if (configs.skipTags && taggedCommits.includes(headSha)) {
+      console.log(
+        `Skipping tagged artifact (id: ${artifact.id}, name: ${artifact.name}, commit: ${headSha}).`
       );
+
+      continue;
+    }
+
+    if (configs.skipRecent && configs.skipRecent > skippedRecentCounter) {
+      console.log(
+        `Skipping recent artifact (id: ${artifact.id}, name: ${artifact.name}).`
+      );
+
+      skippedRecentCounter += 1;
+
+      continue;
+    }
+
+    if (!moment(artifact.created_at).isBefore(configs.maxAge)) {
+      continue;
+    }
+
+    if (devEnv) {
+      console.log(
+        `Recognized development environment, preventing artifact (id: ${artifact.id}, name: ${artifact.name}) from being removed.`
+      );
+
+      continue;
+    }
+
+    await octokit.rest.actions.deleteArtifact({
+      ...configs.repo,
+      artifact_id: artifact.id,
     });
+
+    removedCounter += 1;
+
+    console.log(
+      `Successfully removed artifact (id: ${artifact.id}, name: ${artifact.name}).`
+    );
+  }
+
+  console.log(
+    `Done. Removed ${removedCounter} of ${artifacts.length} artifacts.`
+  );
 }
 
 run().catch((err) => {
