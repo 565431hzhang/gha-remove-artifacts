@@ -12,7 +12,7 @@ GitHub Action Artifacts are removed after [90 days](https://github.community/t5/
 - removes artifacts that are older than the specified age
 - has the option to keep release (tagged) artifacts
 - has the option to keep a number of recent artifacts
-- [respects](https://github.com/octokit/plugin-throttling.js) GitHub's rate limit
+- [respects](https://github.com/octokit/plugin-throttling.js) GitHub's rate limit, with a configurable retry cap
 
 Example use cases:
 - keep all release artifacts for a year, remove non-release artifacts after 30 days
@@ -48,6 +48,7 @@ jobs:
         # Optional inputs
         # skip-tags: true
         # skip-recent: 5
+        # max-retries: 5
 ```
 
 ## License

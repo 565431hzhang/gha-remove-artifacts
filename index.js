@@ -11,7 +11,10 @@ const inputKeys = {
   AGE: devEnv ? "AGE" : "age",
   SKIP_TAGS: devEnv ? "SKIP_TAGS" : "skip-tags",
   SKIP_RECENT: devEnv ? "SKIP_RECENT" : "skip-recent",
+  MAX_RETRIES: devEnv ? "MAX_RETRIES" : "max-retries",
 };
+
+const defaultMaxRetries = 5;
 
 if (devEnv) {
   dotenv.config();
@@ -49,6 +52,12 @@ function getConfigs() {
     }
   }
 
+  const maxRetries = readInput(inputKeys.MAX_RETRIES);
+
+  if (maxRetries && Number.isNaN(Number(maxRetries))) {
+    throw new Error("max-retries option must be type of number.");
+  }
+
   return {
     repo: {
       owner,
@@ -60,7 +69,7 @@ function getConfigs() {
     maxAge: moment().subtract(age, units),
     skipTags: yn(readInput(inputKeys.SKIP_TAGS)),
     skipRecent: Number(skipRecent),
-    retriesEnabled: true,
+    maxRetries: maxRetries ? Number(maxRetries) : defaultMaxRetries,
   };
 }
 
@@ -68,25 +77,35 @@ const ThrottledOctokit = Octokit.plugin(throttling);
 
 async function run() {
   const configs = getConfigs();
+
+  function shouldRetry(retryAfter, retryCount) {
+    if (retryCount >= configs.maxRetries) {
+      console.error(
+        `Giving up after ${retryCount} retries (max-retries: ${configs.maxRetries}).`
+      );
+
+      return false;
+    }
+
+    console.log(`Retrying after ${retryAfter} seconds!`);
+
+    return true;
+  }
   const octokit = new ThrottledOctokit({
     throttle: {
       onRateLimit: (retryAfter, options, _octokit, retryCount) => {
         console.error(
-          `Request quota exhausted for request ${options.method} ${options.url}, number of total global retries: ${retryCount}`
+          `Request quota exhausted for request ${options.method} ${options.url}, retry count: ${retryCount}`
         );
 
-        console.log(`Retrying after ${retryAfter} seconds!`);
-
-        return configs.retriesEnabled;
+        return shouldRetry(retryAfter, retryCount);
       },
       onSecondaryRateLimit: (retryAfter, options, _octokit, retryCount) => {
         console.error(
           `Secondary rate limit hit for request ${options.method} ${options.url}, retry count: ${retryCount}`
         );
 
-        console.log(`Retrying after ${retryAfter} seconds!`);
-
-        return configs.retriesEnabled;
+        return shouldRetry(retryAfter, retryCount);
       },
     },
   });

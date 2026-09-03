@@ -18,3 +18,6 @@ inputs:
   skip-recent:
     description: 'Keep the specified number of artifacts even if they are older than the age.'
     required: false
+  max-retries:
+    description: 'How many times a request is retried when hitting a rate limit before the action fails. Default: 5.'
+    required: false
