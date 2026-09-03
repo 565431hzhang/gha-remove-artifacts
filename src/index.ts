@@ -1,18 +1,7 @@
 import { getInput, setFailed } from "@actions/core";
-import { getConfig, type InputName } from "./config.ts";
+import { getConfig } from "./config.ts";
 import { createOctokit } from "./octokit.ts";
 import { planCleanup, type Artifact } from "./plan.ts";
-
-// Dev mode (`pnpm run dev`): inputs come from .env (AGE, SKIP_TAGS, ...) and nothing is deleted.
-const devEnv = process.env.NODE_ENV === "dev";
-
-function readInput(name: InputName): string | undefined {
-  if (devEnv) {
-    return process.env[name.toUpperCase().replaceAll("-", "_")];
-  }
-
-  return getInput(name);
-}
 
 const PER_PAGE = 100;
 
@@ -20,22 +9,40 @@ function describe(artifact: Artifact): string {
   return `(id: ${artifact.id}, name: ${artifact.name})`;
 }
 
+/** One-line summary of an Octokit RequestError or any other thrown value. */
+function describeError(error: unknown): string {
+  if (error instanceof Error) {
+    const status = (error as { status?: number }).status;
+    return status ? `HTTP ${status}: ${error.message}` : error.message;
+  }
+  return String(error);
+}
+
 async function run(): Promise<void> {
-  const config = getConfig(readInput);
+  const config = getConfig(getInput);
   const octokit = createOctokit(config.maxRetries);
 
   console.log(
-    `Maximum artifact age: removing artifacts created before ${config.maxAge.format()}`
+    `Removing artifacts created before ${config.maxAge.format()}` +
+      (config.dryRun ? " (dry run, nothing is deleted)" : "")
   );
 
-  const taggedCommits = config.skipTags
-    ? (
-        await octokit.paginate(octokit.rest.repos.listTags, {
-          ...config.repo,
-          per_page: PER_PAGE,
-        })
-      ).map((tag) => tag.commit.sha)
-    : [];
+  let taggedCommits: string[] = [];
+
+  if (config.skipTags) {
+    try {
+      const tags = await octokit.paginate(octokit.rest.repos.listTags, {
+        ...config.repo,
+        per_page: PER_PAGE,
+      });
+      taggedCommits = tags.map((tag) => tag.commit.sha);
+    } catch (error) {
+      console.error(
+        `Failed to list tags (needed for skip-tags): ${describeError(error)}`
+      );
+      throw error;
+    }
+  }
 
   const artifacts = await octokit.paginate(
     octokit.rest.actions.listArtifactsForRepo,
@@ -47,8 +54,14 @@ async function run(): Promise<void> {
   const plan = planCleanup(artifacts, { ...config, taggedCommits });
 
   for (const artifact of plan.tagged) {
-    const commit = artifact.workflow_run?.head_sha ?? "unknown commit";
-    console.log(`Skipping tagged artifact ${describe(artifact)}, ${commit}.`);
+    console.log(
+      `Skipping tagged artifact ${describe(artifact)}, commit ${artifact.workflow_run?.head_sha}.`
+    );
+  }
+  for (const artifact of plan.unknownCommit) {
+    console.log(
+      `Skipping artifact ${describe(artifact)}: no commit information, cannot tell whether it is tagged.`
+    );
   }
   for (const artifact of plan.recent) {
     console.log(`Skipping recent artifact ${describe(artifact)}.`);
@@ -61,10 +74,8 @@ async function run(): Promise<void> {
   let failed = 0;
 
   for (const artifact of plan.remove) {
-    if (devEnv) {
-      console.log(
-        `Development environment, not removing artifact ${describe(artifact)}.`
-      );
+    if (config.dryRun) {
+      console.log(`Would remove artifact ${describe(artifact)}.`);
       removed += 1;
       continue;
     }
@@ -84,14 +95,16 @@ async function run(): Promise<void> {
 
       failed += 1;
       console.error(
-        `Failed to remove artifact ${describe(artifact)}: ${(error as Error).message}`
+        `Failed to remove artifact ${describe(artifact)}: ${describeError(error)}`
       );
     }
   }
 
+  const skipped = plan.tagged.length + plan.unknownCommit.length;
+
   console.log(
-    `Done. ${devEnv ? "Would have removed" : "Removed"} ${removed} artifacts. ` +
-      `Skipped ${plan.tagged.length} tagged, ${plan.recent.length} recent, ` +
+    `Done. ${config.dryRun ? "Would have removed" : "Removed"} ${removed} artifacts. ` +
+      `Skipped ${skipped} tagged, ${plan.recent.length} recent, ` +
       `${plan.kept.length} newer than the maximum age, ${plan.invalid.length} invalid. ` +
       `Failed: ${failed}.`
   );
@@ -103,6 +116,6 @@ async function run(): Promise<void> {
   }
 }
 
-run().catch((error: Error) => {
-  setFailed(error.message);
+run().catch((error: unknown) => {
+  setFailed(error instanceof Error ? error : String(error));
 });

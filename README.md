@@ -49,6 +49,7 @@ jobs:
         # skip-tags: true
         # skip-recent: 5
         # max-retries: 5
+        # dry-run: true
 ```
 
 ## License

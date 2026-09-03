@@ -83,9 +83,11 @@ describe("planCleanup", () => {
     });
 
     assert.deepEqual(
-      plan.tagged.map((a) => a.id),
+      plan.unknownCommit.map((a) => a.id),
       [1]
     );
+    assert.deepEqual(plan.tagged, []);
+    assert.deepEqual(plan.remove, []);
   });
 
   it("deletes artifacts of tagged commits when skip-tags is off", () => {
@@ -114,14 +116,41 @@ describe("planCleanup", () => {
 
   it("keeps artifacts with an invalid created_at", () => {
     const plan = planCleanup(
-      [{ ...artifact(1, 40), created_at: null }],
+      [
+        { ...artifact(1, 40), created_at: null },
+        { ...artifact(2, 40), created_at: "soon" },
+      ],
       defaults
     );
 
     assert.deepEqual(
       plan.invalid.map((a) => a.id),
-      [1]
+      [1, 2]
     );
     assert.deepEqual(plan.remove, []);
+  });
+
+  it("does not let invalid artifacts take skip-recent slots", () => {
+    const plan = planCleanup(
+      [
+        { ...artifact(1, 40), created_at: null },
+        artifact(2, 10),
+        artifact(3, 40),
+      ],
+      { ...defaults, skipRecent: 1 }
+    );
+
+    assert.deepEqual(
+      plan.recent.map((a) => a.id),
+      [2]
+    );
+    assert.deepEqual(
+      plan.invalid.map((a) => a.id),
+      [1]
+    );
+    assert.deepEqual(
+      plan.remove.map((a) => a.id),
+      [3]
+    );
   });
 });

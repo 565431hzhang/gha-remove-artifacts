@@ -21,15 +21,40 @@ describe("parseAge", () => {
     );
   });
 
+  it("accepts singular and short unit spellings", () => {
+    assert.equal(
+      parseAge("1 day", now).toISOString(),
+      "2026-09-02T12:00:00.000Z"
+    );
+    assert.equal(
+      parseAge("2 d", now).toISOString(),
+      "2026-09-01T12:00:00.000Z"
+    );
+    assert.equal(
+      parseAge("1 M", now).toISOString(),
+      "2026-08-03T12:00:00.000Z"
+    );
+  });
+
   it("rejects malformed values", () => {
-    for (const value of [
+    const malformed = [
       "",
       "month",
       "1",
       "1 fortnight",
       "-1 days",
       "1 2 days",
-    ]) {
+      // fractional amounts are rounded or dropped by moment
+      "0.4 days",
+      "1.5 months",
+      // units moment knows but that are not durations (would subtract nothing)
+      "1 D",
+      "30 date",
+      "3 weekdays",
+      "1 dayOfYear",
+    ];
+
+    for (const value of malformed) {
       assert.throws(() => parseAge(value, now), /age must be/, value);
     }
   });
@@ -40,6 +65,9 @@ describe("parseBoolean", () => {
     assert.equal(parseBoolean("true"), true);
     assert.equal(parseBoolean("Yes"), true);
     assert.equal(parseBoolean("1"), true);
+    assert.equal(parseBoolean("t"), true);
+    assert.equal(parseBoolean("T"), true);
+    assert.equal(parseBoolean("on"), true);
     assert.equal(parseBoolean("false"), false);
     assert.equal(parseBoolean("no"), false);
     assert.equal(parseBoolean(""), false);
@@ -79,6 +107,7 @@ describe("getConfig", () => {
     assert.equal(config.skipTags, false);
     assert.equal(config.skipRecent, 0);
     assert.equal(config.maxRetries, 5);
+    assert.equal(config.dryRun, false);
   });
 
   it("reads all inputs", () => {

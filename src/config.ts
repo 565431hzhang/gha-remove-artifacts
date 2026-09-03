@@ -1,6 +1,7 @@
 import moment from "moment";
 
-export type InputName = "age" | "skip-tags" | "skip-recent" | "max-retries";
+export type InputName =
+  "age" | "skip-tags" | "skip-recent" | "max-retries" | "dry-run";
 
 /** Reads a raw input value; `undefined` or `""` when not provided. */
 export type InputReader = (name: InputName) => string | undefined;
@@ -12,11 +13,14 @@ export interface Config {
   skipTags: boolean;
   skipRecent: number;
   maxRetries: number;
+  /** Log what would be removed without deleting anything. */
+  dryRun: boolean;
 }
 
 const DEFAULT_MAX_RETRIES = 5;
 
-const truthy = new Set(["true", "1", "yes", "y", "on"]);
+// Same spellings the `yn` package accepted.
+const truthy = new Set(["y", "yes", "t", "true", "1", "on"]);
 
 export function parseBoolean(value: string | undefined): boolean {
   return value !== undefined && truthy.has(value.trim().toLowerCase());
@@ -39,16 +43,44 @@ export function parseCount(
   return count;
 }
 
+// moment.normalizeUnits also knows non-duration units such as "date" (D) or
+// "weekday" (e), which subtract() silently treats as zero, so allowlist explicitly.
+const durationUnits = new Set<moment.unitOfTime.DurationConstructor>([
+  "years",
+  "quarters",
+  "months",
+  "weeks",
+  "days",
+  "hours",
+  "minutes",
+  "seconds",
+  "milliseconds",
+]);
+
+function toDurationUnit(
+  text: string | undefined
+): moment.unitOfTime.DurationConstructor | undefined {
+  if (!text) {
+    return undefined;
+  }
+
+  const normalized = moment.normalizeUnits(text as moment.unitOfTime.All);
+  const plural = normalized ? `${normalized}s` : undefined;
+
+  return durationUnits.has(plural as moment.unitOfTime.DurationConstructor)
+    ? (plural as moment.unitOfTime.DurationConstructor)
+    : undefined;
+}
+
 /** Parses e.g. "1 month" or "90 seconds" into a point in time relative to `now`. */
 export function parseAge(value: string, now = moment()): moment.Moment {
   const [amountText, unitText, ...rest] = value.trim().split(/\s+/);
   const amount = Number(amountText);
-  const unit = moment.normalizeUnits(unitText as moment.unitOfTime.All) as
-    moment.unitOfTime.DurationConstructor | undefined;
+  const unit = toDurationUnit(unitText);
 
-  if (rest.length > 0 || !Number.isFinite(amount) || amount < 0 || !unit) {
+  if (rest.length > 0 || !Number.isInteger(amount) || amount < 0 || !unit) {
     throw new Error(
-      `age must be "<number> <unit>", e.g. "1 month" or "90 seconds", got "${value}".`
+      `age must be "<whole number> <unit>", e.g. "1 month" or "90 seconds", got "${value}".`
     );
   }
 
@@ -79,5 +111,6 @@ export function getConfig(
     maxRetries:
       parseCount("max-retries", readInput("max-retries")) ??
       DEFAULT_MAX_RETRIES,
+    dryRun: parseBoolean(readInput("dry-run")),
   };
 }

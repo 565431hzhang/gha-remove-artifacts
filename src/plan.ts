@@ -1,4 +1,4 @@
-import moment from "moment";
+import type moment from "moment";
 
 /** The subset of the GitHub artifact object this action uses. */
 export interface Artifact {
@@ -18,8 +18,10 @@ export interface PlanOptions {
 export interface Plan {
   /** Older than maxAge, to be deleted. */
   remove: Artifact[];
-  /** Kept because skip-tags is on and the artifact belongs to a tagged commit (or its commit is unknown). */
+  /** Kept because skip-tags is on and the artifact belongs to a tagged commit. */
   tagged: Artifact[];
+  /** Kept because skip-tags is on and the artifact has no commit to check against. */
+  unknownCommit: Artifact[];
   /** Kept because of skip-recent. */
   recent: Artifact[];
   /** Kept because they are newer than maxAge. */
@@ -37,22 +39,39 @@ export function planCleanup(artifacts: Artifact[], options: PlanOptions): Plan {
   const plan: Plan = {
     remove: [],
     tagged: [],
+    unknownCommit: [],
     recent: [],
     kept: [],
     invalid: [],
   };
   const tagged = new Set(options.taggedCommits);
+  const maxAge = options.maxAge.valueOf();
 
-  const unique = [...new Map(artifacts.map((a) => [a.id, a])).values()].sort(
-    (a, b) => moment(b.created_at).valueOf() - moment(a.created_at).valueOf()
-  );
+  const dated: { artifact: Artifact; createdAt: number }[] = [];
 
-  for (const artifact of unique) {
+  for (const artifact of new Map(artifacts.map((a) => [a.id, a])).values()) {
+    const createdAt = Date.parse(artifact.created_at ?? "");
+
+    if (Number.isNaN(createdAt)) {
+      plan.invalid.push(artifact);
+    } else {
+      dated.push({ artifact, createdAt });
+    }
+  }
+
+  dated.sort((a, b) => b.createdAt - a.createdAt);
+
+  for (const { artifact, createdAt } of dated) {
     if (options.skipTags) {
       const headSha = artifact.workflow_run?.head_sha;
 
-      // Fail safe: without a commit we cannot tell whether it is a release artifact.
-      if (!headSha || tagged.has(headSha)) {
+      if (!headSha) {
+        // Fail safe: without a commit we cannot tell whether it is a release artifact.
+        plan.unknownCommit.push(artifact);
+        continue;
+      }
+
+      if (tagged.has(headSha)) {
         plan.tagged.push(artifact);
         continue;
       }
@@ -60,14 +79,7 @@ export function planCleanup(artifacts: Artifact[], options: PlanOptions): Plan {
 
     if (plan.recent.length < options.skipRecent) {
       plan.recent.push(artifact);
-      continue;
-    }
-
-    const createdAt = moment(artifact.created_at);
-
-    if (!createdAt.isValid()) {
-      plan.invalid.push(artifact);
-    } else if (createdAt.isBefore(options.maxAge)) {
+    } else if (createdAt < maxAge) {
       plan.remove.push(artifact);
     } else {
       plan.kept.push(artifact);

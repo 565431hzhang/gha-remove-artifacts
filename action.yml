@@ -21,3 +21,6 @@ inputs:
   max-retries:
     description: 'How many times a request is retried when hitting a rate limit before the action fails. Default: 5.'
     required: false
+  dry-run:
+    description: 'true/false. If enabled, logs which artifacts would be removed without deleting anything.'
+    required: false
