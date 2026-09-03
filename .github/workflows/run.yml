@@ -2,30 +2,22 @@ name: Run
 
 on: [push]
 
-env:
-  node_version: "12.x"
-
 jobs:
   run-action:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
     - uses: actions/checkout@v4
+    - uses: pnpm/action-setup@v4
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: ${{ env.node_version }}
-    - name: Cache node_modules
-      uses: actions/cache@v4
-      with:
-        path: node_modules
-        key: ${{ runner.OS }}-node_modules-${{ hashFiles('**/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.OS }}-node_modules-
+        node-version-file: .tool-versions
+        cache: pnpm
     - name: Install JS dependencies
-      run: ls package-lock.json && npm install || yarn install
+      run: pnpm install --frozen-lockfile
     - name: Build
-      run: npm run build
+      run: pnpm run build
     - name: Run action
       uses: ./
       with:
