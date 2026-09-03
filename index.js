@@ -111,19 +111,13 @@ async function run() {
   });
 
   async function getTaggedCommits() {
-    const tags = await octokit.paginate(octokit.rest.repos.listTags, {
-      ...configs.repo,
-      per_page: configs.pagination.perPage,
-    });
-
-    return tags.map((tag) => tag.commit.sha);
-  }
-
-  let taggedCommits;
-
-  if (configs.skipTags) {
     try {
-      taggedCommits = await getTaggedCommits();
+      const tags = await octokit.paginate(octokit.rest.repos.listTags, {
+        ...configs.repo,
+        per_page: configs.pagination.perPage,
+      });
+
+      return tags.map((tag) => tag.commit.sha);
     } catch (err) {
       console.error("Error while requesting tags: ", err);
 
@@ -131,7 +125,9 @@ async function run() {
     }
   }
 
-  const artifacts = await octokit.paginate(
+  const taggedCommits = configs.skipTags ? await getTaggedCommits() : [];
+
+  const listedArtifacts = await octokit.paginate(
     octokit.rest.actions.listArtifactsForRepo,
     {
       ...configs.repo,
@@ -139,62 +135,115 @@ async function run() {
     }
   );
 
-  let skippedRecentCounter = 0;
-  let removedCounter = 0;
+  // The API returns newest first, but that is undocumented, and page-based
+  // pagination can repeat an item when artifacts are uploaded concurrently.
+  // Dedupe and sort so `skip-recent` keeps the genuinely newest artifacts.
+  const artifacts = [
+    ...new Map(
+      listedArtifacts.map((artifact) => [artifact.id, artifact])
+    ).values(),
+  ].sort(
+    (a, b) => moment(b.created_at).valueOf() - moment(a.created_at).valueOf()
+  );
 
-  // Artifacts are listed newest first.
+  console.log(`Found ${artifacts.length} artifacts.`);
+
+  const counters = { removed: 0, tagged: 0, recent: 0, kept: 0, failed: 0 };
+  const errors = [];
+
   for (const artifact of artifacts) {
-    if (artifact.expired) {
+    const label = `(id: ${artifact.id}, name: ${artifact.name})`;
+
+    if (configs.skipTags) {
+      const headSha = artifact.workflow_run?.head_sha;
+
+      if (!headSha) {
+        console.log(
+          `Skipping artifact ${label}: no commit information, cannot tell whether it is tagged.`
+        );
+
+        counters.tagged += 1;
+
+        continue;
+      }
+
+      if (taggedCommits.includes(headSha)) {
+        console.log(`Skipping tagged artifact ${label}, commit: ${headSha}.`);
+
+        counters.tagged += 1;
+
+        continue;
+      }
+    }
+
+    if (configs.skipRecent > counters.recent) {
+      console.log(`Skipping recent artifact ${label}.`);
+
+      counters.recent += 1;
+
       continue;
     }
 
-    const headSha = artifact.workflow_run?.head_sha;
+    const createdAt = moment(artifact.created_at);
 
-    if (configs.skipTags && taggedCommits.includes(headSha)) {
-      console.log(
-        `Skipping tagged artifact (id: ${artifact.id}, name: ${artifact.name}, commit: ${headSha}).`
-      );
+    if (!createdAt.isValid()) {
+      console.log(`Skipping artifact ${label}: invalid created_at.`);
 
-      continue;
-    }
-
-    if (configs.skipRecent && configs.skipRecent > skippedRecentCounter) {
-      console.log(
-        `Skipping recent artifact (id: ${artifact.id}, name: ${artifact.name}).`
-      );
-
-      skippedRecentCounter += 1;
+      counters.kept += 1;
 
       continue;
     }
 
-    if (!moment(artifact.created_at).isBefore(configs.maxAge)) {
+    if (!createdAt.isBefore(configs.maxAge)) {
+      counters.kept += 1;
+
       continue;
     }
 
     if (devEnv) {
       console.log(
-        `Recognized development environment, preventing artifact (id: ${artifact.id}, name: ${artifact.name}) from being removed.`
+        `Recognized development environment, preventing artifact ${label} from being removed.`
       );
+
+      counters.removed += 1;
 
       continue;
     }
 
-    await octokit.rest.actions.deleteArtifact({
-      ...configs.repo,
-      artifact_id: artifact.id,
-    });
+    try {
+      await octokit.rest.actions.deleteArtifact({
+        ...configs.repo,
+        artifact_id: artifact.id,
+      });
 
-    removedCounter += 1;
+      counters.removed += 1;
 
-    console.log(
-      `Successfully removed artifact (id: ${artifact.id}, name: ${artifact.name}).`
-    );
+      console.log(`Successfully removed artifact ${label}.`);
+    } catch (err) {
+      if (err.status === 404) {
+        console.log(`Artifact ${label} was already removed.`);
+
+        continue;
+      }
+
+      console.error(`Failed to remove artifact ${label}: ${err.message}`);
+
+      counters.failed += 1;
+      errors.push(err);
+    }
   }
 
   console.log(
-    `Done. Removed ${removedCounter} of ${artifacts.length} artifacts.`
+    `Done. ${devEnv ? "Would have removed" : "Removed"} ${counters.removed} artifacts. ` +
+      `Skipped ${counters.tagged} tagged, ${counters.recent} recent, ${counters.kept} newer than the maximum age. ` +
+      `Failed: ${counters.failed}.`
   );
+
+  if (errors.length > 0) {
+    throw new Error(
+      `${errors.length} artifact(s) could not be removed, see the log above.`
+    );
+  }
 }
 
 run().catch((err) => {
