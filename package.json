@@ -1,6 +1,6 @@
 {
   "name": "gha-remove-artifacts",
-  "version": "1.2.0",
+  "version": "1.5.0",
   "description": "GitHub Action to remove old artifacts",
   "main": "dist/index.js",
   "scripts": {
