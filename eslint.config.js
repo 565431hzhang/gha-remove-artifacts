@@ -1,13 +1,18 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import js from "@eslint/js";
 import globals from "globals";
+import tseslint from "typescript-eslint";
 import prettierRecommended from "eslint-plugin-prettier/recommended";
 
 export default defineConfig([
   globalIgnores(["dist/"]),
   {
-    files: ["**/*.js"],
-    extends: [js.configs.recommended, prettierRecommended],
+    files: ["**/*.{js,ts}"],
+    extends: [
+      js.configs.recommended,
+      tseslint.configs.recommended,
+      prettierRecommended,
+    ],
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",

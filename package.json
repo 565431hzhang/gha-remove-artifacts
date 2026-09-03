@@ -4,8 +4,10 @@
   "description": "GitHub Action to remove old artifacts",
   "main": "dist/index.js",
   "scripts": {
-    "build": "ncc build index.js --minify",
-    "dev": "cross-env NODE_ENV=dev node ./index.js",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node24 --format=esm --minify --outfile=dist/index.js --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
+    "dev": "node --env-file=.env src/index.ts",
+    "test": "node --test 'src/**/*.test.ts'",
+    "typecheck": "tsc",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },
@@ -32,23 +34,25 @@
     "yn": "^5.1.0"
   },
   "//devDependencies": {
-    "@vercel/ncc": "bundle index.js and dependencies into dist/",
-    "cross-env": "set NODE_ENV for the dev script",
-    "dotenv-safe": "load .env in dev mode",
+    "@types/node": "Node.js types",
+    "esbuild": "bundle src/ and dependencies into dist/index.js",
     "eslint*": "code style",
     "globals": "Node.js globals for ESLint",
-    "prettier": "code formatting"
+    "prettier": "code formatting",
+    "typescript": "type checking; Node runs the .ts sources directly",
+    "typescript-eslint": "ESLint support for TypeScript"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@vercel/ncc": "0.45.0",
-    "cross-env": "^10.1.0",
-    "dotenv-safe": "^9.1.0",
+    "@types/node": "^24.13.3",
+    "esbuild": "^0.28.2",
     "eslint": "^10.9.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.6",
     "globals": "^17.12.0",
-    "prettier": "^3.9.6"
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.69.0"
   },
   "engines": {
     "node": ">=24",
