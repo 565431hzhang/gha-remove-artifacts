@@ -1,8 +1,9 @@
-const core = require("@actions/core");
-const { Octokit } = require("@octokit/action");
-const { throttling } = require("@octokit/plugin-throttling");
-const moment = require("moment");
-const yn = require("yn");
+import { getInput, setFailed } from "@actions/core";
+import { Octokit } from "@octokit/action";
+import { throttling } from "@octokit/plugin-throttling";
+import moment from "moment";
+import yn from "yn";
+import dotenv from "dotenv-safe";
 
 const devEnv = process.env.NODE_ENV === "dev";
 
@@ -13,7 +14,7 @@ const inputKeys = {
 };
 
 if (devEnv) {
-  require("dotenv-safe").config();
+  dotenv.config();
 }
 
 function readInput(key, isRequired = false) {
@@ -21,7 +22,7 @@ function readInput(key, isRequired = false) {
     return process.env[key];
   }
 
-  return core.getInput(key, { required: isRequired });
+  return getInput(key, { required: isRequired });
 }
 
 function getConfigs() {
@@ -69,18 +70,18 @@ async function run() {
   const configs = getConfigs();
   const octokit = new ThrottledOctokit({
     throttle: {
-      onRateLimit: (retryAfter, options) => {
+      onRateLimit: (retryAfter, options, _octokit, retryCount) => {
         console.error(
-          `Request quota exhausted for request ${options.method} ${options.url}, number of total global retries: ${options.request.retryCount}`
+          `Request quota exhausted for request ${options.method} ${options.url}, number of total global retries: ${retryCount}`
         );
 
         console.log(`Retrying after ${retryAfter} seconds!`);
 
         return configs.retriesEnabled;
       },
-      onAbuseLimit: (retryAfter, options) => {
+      onSecondaryRateLimit: (retryAfter, options, _octokit, retryCount) => {
         console.error(
-          `Abuse detected for request ${options.method} ${options.url}, retry count: ${options.request.retryCount}`
+          `Secondary rate limit hit for request ${options.method} ${options.url}, retry count: ${retryCount}`
         );
 
         console.log(`Retrying after ${retryAfter} seconds!`);
@@ -91,13 +92,10 @@ async function run() {
   });
 
   async function getTaggedCommits() {
-    const listTagsRequest = octokit.repos.listTags.endpoint.merge({
+    const tags = await octokit.paginate(octokit.rest.repos.listTags, {
       ...configs.repo,
       per_page: configs.pagination.perPage,
-      ref: "tags",
     });
-
-    const tags = await octokit.paginate(listTagsRequest);
 
     return tags.map((tag) => tag.commit.sha);
   }
@@ -106,7 +104,7 @@ async function run() {
 
   if (configs.skipTags) {
     try {
-      taggedCommits = await getTaggedCommits(octokit);
+      taggedCommits = await getTaggedCommits();
     } catch (err) {
       console.error("Error while requesting tags: ", err);
 
@@ -114,28 +112,29 @@ async function run() {
     }
   }
 
-  const workflowRunsRequest =
-    octokit.actions.listRepoWorkflowRuns.endpoint.merge({
-      ...configs.repo,
-      per_page: configs.pagination.perPage,
-    });
-
   let skippedArtifactsCounter = 0;
 
   return octokit
-    .paginate(workflowRunsRequest, ({ data }, done) => {
-      const stopPagination = data.find((workflowRun) => {
-        const createdAt = moment(workflowRun.created_at);
+    .paginate(
+      octokit.rest.actions.listWorkflowRunsForRepo,
+      {
+        ...configs.repo,
+        per_page: configs.pagination.perPage,
+      },
+      ({ data }, done) => {
+        const stopPagination = data.find((workflowRun) => {
+          const createdAt = moment(workflowRun.created_at);
 
-        return createdAt.isBefore(moment.utc().subtract(90, "days"));
-      });
+          return createdAt.isBefore(moment.utc().subtract(90, "days"));
+        });
 
-      if (stopPagination) {
-        done();
+        if (stopPagination) {
+          done();
+        }
+
+        return data;
       }
-
-      return data;
-    })
+    )
     .then((workflowRuns) => {
       const artifactPromises = workflowRuns
         .filter((workflowRun) => {
@@ -150,16 +149,13 @@ async function run() {
 
           return true;
         })
-        .map((workflowRun) => {
-          const workflowRunArtifactsRequest =
-            octokit.actions.listWorkflowRunArtifacts.endpoint.merge({
+        .map((workflowRun) =>
+          octokit
+            .paginate(octokit.rest.actions.listWorkflowRunArtifacts, {
               ...configs.repo,
               per_page: configs.pagination.perPage,
               run_id: workflowRun.id,
-            });
-
-          return octokit
-            .paginate(workflowRunArtifactsRequest)
+            })
             .then((artifacts) =>
               artifacts
                 .filter((artifact) => {
@@ -192,7 +188,7 @@ async function run() {
                     });
                   }
 
-                  return octokit.actions
+                  return octokit.rest.actions
                     .deleteArtifact({
                       ...configs.repo,
                       artifact_id: artifact.id,
@@ -203,8 +199,8 @@ async function run() {
                       );
                     });
                 })
-            );
-        });
+            )
+        );
 
       return Promise.all(artifactPromises).then((artifactDeletePromises) =>
         Promise.all([].concat(...artifactDeletePromises))
@@ -213,5 +209,5 @@ async function run() {
 }
 
 run().catch((err) => {
-  core.setFailed(err.toString());
+  setFailed(err.toString());
 });
