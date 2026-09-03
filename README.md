@@ -8,7 +8,7 @@ Status and support
 - &#x2714; supported
 - &#x2716; no ongoing development
 
-[![CI](/../../workflows/CI/badge.svg?branch=master)](/../../actions)
+[![CI](/../../workflows/CI/badge.svg?branch=main)](/../../actions)
 
 GitHub Action Artifacts are removed after [90 days](https://github.community/t5/GitHub-Actions/Managing-Actions-storage-space/m-p/41424/highlight/true#M4618) by default. [GitHub now supports changing this setting](https://github.blog/changelog/2020-10-08-github-actions-ability-to-change-retention-days-for-artifacts-and-logs/). This action allows you to further customize the cleanup. It
 - removes artifacts that are older than the specified age
