@@ -10,18 +10,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
     - name: Setup Node.js
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ env.node_version }}
     - name: Cache node_modules
-      uses: actions/cache@v1
+      uses: actions/cache@v4
       with:
         path: node_modules
-        key: ${{ runner.OS }}-node_modules-${{ hashFiles('**//package-lock.json') }}
+        key: ${{ runner.OS }}-node_modules-${{ hashFiles('**/package-lock.json') }}
         restore-keys: |
-          ${{ runner.OS }}--
+          ${{ runner.OS }}-node_modules-
     - name: Install JS dependencies
       run: ls package-lock.json && npm install || yarn install
     - name: Build
@@ -38,9 +38,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
     - name: Create artifact for testing
-      uses: actions/upload-artifact@master
+      uses: actions/upload-artifact@v4
       with:
         name: test-artifacts
         path: ./

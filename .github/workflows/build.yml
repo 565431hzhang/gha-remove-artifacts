@@ -13,13 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Setup Node.js
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.node_version }}
       - name: Cache node_modules
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: node_modules
           key: ${{ runner.OS }}-node_modules-${{ hashFiles('**/package-lock.json') }}
@@ -30,7 +30,7 @@ jobs:
       - name: Build
         run: npm run build
       - name: Commit and push distified version to master
-        uses: stefanzweifel/git-auto-commit-action@v4.1.1
+        uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: 'Update distified version'
           file_pattern: 'dist/index.js'
