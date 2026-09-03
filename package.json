@@ -17,7 +17,13 @@
   ],
   "author": "c-hive",
   "license": "MIT",
-  "//dependencies": {},
+  "//dependencies": {
+    "@actions/core": "read action inputs, report failure",
+    "@octokit/action": "GitHub API client, authenticates with the workflow token",
+    "@octokit/plugin-throttling": "respect rate limits, retry",
+    "moment": "parse the `age` input, compare dates",
+    "yn": "parse yes/no-like input values"
+  },
   "dependencies": {
     "@actions/core": "^3.0.1",
     "@octokit/action": "^8.0.4",
@@ -26,7 +32,11 @@
     "yn": "^5.1.0"
   },
   "//devDependencies": {
+    "@vercel/ncc": "bundle index.js and dependencies into dist/",
+    "cross-env": "set NODE_ENV for the dev script",
+    "dotenv-safe": "load .env in dev mode",
     "eslint*": "code style",
+    "globals": "Node.js globals for ESLint",
     "prettier": "code formatting"
   },
   "devDependencies": {
