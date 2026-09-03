@@ -9,13 +9,16 @@ function describe(artifact: Artifact): string {
   return `(id: ${artifact.id}, name: ${artifact.name})`;
 }
 
-/** One-line summary of an Octokit RequestError or any other thrown value. */
+/** HTTP status of an Octokit request error, if that is what `error` is. */
+function httpStatus(error: unknown): number | undefined {
+  return (error as { status?: number } | null)?.status;
+}
+
+/** One-line summary of a thrown value. */
 function describeError(error: unknown): string {
-  if (error instanceof Error) {
-    const status = (error as { status?: number }).status;
-    return status ? `HTTP ${status}: ${error.message}` : error.message;
-  }
-  return String(error);
+  const message = error instanceof Error ? error.message : String(error);
+  const status = httpStatus(error);
+  return status ? `HTTP ${status}: ${message}` : message;
 }
 
 async function run(): Promise<void> {
@@ -27,22 +30,14 @@ async function run(): Promise<void> {
       (config.dryRun ? " (dry run, nothing is deleted)" : "")
   );
 
-  let taggedCommits: string[] = [];
-
-  if (config.skipTags) {
-    try {
-      const tags = await octokit.paginate(octokit.rest.repos.listTags, {
-        ...config.repo,
-        per_page: PER_PAGE,
-      });
-      taggedCommits = tags.map((tag) => tag.commit.sha);
-    } catch (error) {
-      console.error(
-        `Failed to list tags (needed for skip-tags): ${describeError(error)}`
-      );
-      throw error;
-    }
-  }
+  const taggedCommits = config.skipTags
+    ? (
+        await octokit.paginate(octokit.rest.repos.listTags, {
+          ...config.repo,
+          per_page: PER_PAGE,
+        })
+      ).map((tag) => tag.commit.sha)
+    : [];
 
   const artifacts = await octokit.paginate(
     octokit.rest.actions.listArtifactsForRepo,
@@ -53,21 +48,22 @@ async function run(): Promise<void> {
 
   const plan = planCleanup(artifacts, { ...config, taggedCommits });
 
-  for (const artifact of plan.tagged) {
-    console.log(
-      `Skipping tagged artifact ${describe(artifact)}, commit ${artifact.workflow_run?.head_sha}.`
-    );
-  }
-  for (const artifact of plan.unknownCommit) {
-    console.log(
-      `Skipping artifact ${describe(artifact)}: no commit information, cannot tell whether it is tagged.`
-    );
-  }
-  for (const artifact of plan.recent) {
-    console.log(`Skipping recent artifact ${describe(artifact)}.`);
-  }
-  for (const artifact of plan.invalid) {
-    console.log(`Skipping artifact ${describe(artifact)}: invalid created_at.`);
+  const skipReasons: [Artifact[], (artifact: Artifact) => string][] = [
+    [plan.tagged, (a) => `tagged, commit ${a.workflow_run?.head_sha}`],
+    [
+      plan.unknownCommit,
+      () => "no commit information, cannot tell whether it is tagged",
+    ],
+    [plan.recent, () => "recent"],
+    [plan.invalid, () => "invalid created_at"],
+  ];
+
+  for (const [artifacts, reason] of skipReasons) {
+    for (const artifact of artifacts) {
+      console.log(
+        `Skipping artifact ${describe(artifact)}: ${reason(artifact)}.`
+      );
+    }
   }
 
   let removed = 0;
@@ -88,7 +84,7 @@ async function run(): Promise<void> {
       removed += 1;
       console.log(`Removed artifact ${describe(artifact)}.`);
     } catch (error) {
-      if ((error as { status?: number }).status === 404) {
+      if (httpStatus(error) === 404) {
         console.log(`Artifact ${describe(artifact)} was already removed.`);
         continue;
       }

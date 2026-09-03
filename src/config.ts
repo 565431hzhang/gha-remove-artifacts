@@ -45,36 +45,31 @@ export function parseCount(
 
 // moment.normalizeUnits also knows non-duration units such as "date" (D) or
 // "weekday" (e), which subtract() silently treats as zero, so allowlist explicitly.
-const durationUnits = new Set<moment.unitOfTime.DurationConstructor>([
-  "years",
-  "quarters",
-  "months",
-  "weeks",
-  "days",
-  "hours",
-  "minutes",
-  "seconds",
-  "milliseconds",
+const durationUnits = new Set([
+  "year",
+  "quarter",
+  "month",
+  "week",
+  "day",
+  "hour",
+  "minute",
+  "second",
+  "millisecond",
 ]);
 
 function toDurationUnit(
-  text: string | undefined
+  text: string
 ): moment.unitOfTime.DurationConstructor | undefined {
-  if (!text) {
-    return undefined;
-  }
+  const unit = moment.normalizeUnits(text as moment.unitOfTime.All);
 
-  const normalized = moment.normalizeUnits(text as moment.unitOfTime.All);
-  const plural = normalized ? `${normalized}s` : undefined;
-
-  return durationUnits.has(plural as moment.unitOfTime.DurationConstructor)
-    ? (plural as moment.unitOfTime.DurationConstructor)
+  return durationUnits.has(unit)
+    ? (unit as moment.unitOfTime.DurationConstructor)
     : undefined;
 }
 
 /** Parses e.g. "1 month" or "90 seconds" into a point in time relative to `now`. */
 export function parseAge(value: string, now = moment()): moment.Moment {
-  const [amountText, unitText, ...rest] = value.trim().split(/\s+/);
+  const [amountText, unitText = "", ...rest] = value.trim().split(/\s+/);
   const amount = Number(amountText);
   const unit = toDurationUnit(unitText);
 

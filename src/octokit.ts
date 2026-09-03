@@ -3,10 +3,8 @@ import { throttling } from "@octokit/plugin-throttling";
 
 const ThrottledOctokit = Octokit.plugin(throttling);
 
-type ThrottledOctokit = InstanceType<typeof ThrottledOctokit>;
-
 /** An Octokit that retries rate-limited requests up to `maxRetries` times. */
-export function createOctokit(maxRetries: number): ThrottledOctokit {
+export function createOctokit(maxRetries: number) {
   function shouldRetry(retryAfter: number, retryCount: number): boolean {
     if (retryCount >= maxRetries) {
       console.error(
