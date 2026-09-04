@@ -1,7 +1,12 @@
 import moment from "moment";
 
 export type InputName =
-  "age" | "skip-tags" | "skip-recent" | "max-retries" | "dry-run";
+  | "age"
+  | "skip-tags"
+  | "skip-recent"
+  | "skip-recent-commits"
+  | "max-retries"
+  | "dry-run";
 
 /** Reads a raw input value; `undefined` or `""` when not provided. */
 export type InputReader = (name: InputName) => string | undefined;
@@ -12,6 +17,7 @@ export interface Config {
   maxAge: moment.Moment;
   skipTags: boolean;
   skipRecent: number;
+  skipRecentCommits: number;
   maxRetries: number;
   /** Log what would be removed without deleting anything. */
   dryRun: boolean;
@@ -103,6 +109,8 @@ export function getConfig(
     maxAge: parseAge(age),
     skipTags: parseBoolean(readInput("skip-tags")),
     skipRecent: parseCount("skip-recent", readInput("skip-recent")) ?? 0,
+    skipRecentCommits:
+      parseCount("skip-recent-commits", readInput("skip-recent-commits")) ?? 0,
     maxRetries:
       parseCount("max-retries", readInput("max-retries")) ??
       DEFAULT_MAX_RETRIES,

@@ -15,7 +15,13 @@ function artifact(id: number, daysOld: number, headSha?: string): Artifact {
   };
 }
 
-const defaults = { maxAge, skipTags: false, taggedCommits: [], skipRecent: 0 };
+const defaults = {
+  maxAge,
+  skipTags: false,
+  taggedCommits: [],
+  skipRecent: 0,
+  skipRecentCommits: 0,
+};
 
 describe("planCleanup", () => {
   it("removes artifacts older than maxAge and keeps newer ones", () => {
@@ -147,6 +153,49 @@ describe("planCleanup", () => {
     assert.deepEqual(
       plan.invalid.map((a) => a.id),
       [1]
+    );
+    assert.deepEqual(
+      plan.remove.map((a) => a.id),
+      [3]
+    );
+  });
+
+  it("keeps all artifacts of the most recent commits for skip-recent-commits", () => {
+    const plan = planCleanup(
+      [
+        artifact(1, 40, "c3"),
+        artifact(2, 41, "c3"),
+        artifact(3, 50, "c2"),
+        artifact(4, 60, "c1"),
+        artifact(5, 70, "c2"),
+        artifact(6, 80),
+      ],
+      { ...defaults, skipRecentCommits: 2 }
+    );
+
+    assert.deepEqual(
+      plan.recentCommit.map((a) => a.id),
+      [1, 2, 3, 5]
+    );
+    assert.deepEqual(
+      plan.remove.map((a) => a.id),
+      [4, 6]
+    );
+  });
+
+  it("does not count artifacts of recent commits towards skip-recent", () => {
+    const plan = planCleanup(
+      [artifact(1, 40, "c2"), artifact(2, 50, "c1"), artifact(3, 60, "c1")],
+      { ...defaults, skipRecentCommits: 1, skipRecent: 1 }
+    );
+
+    assert.deepEqual(
+      plan.recentCommit.map((a) => a.id),
+      [1]
+    );
+    assert.deepEqual(
+      plan.recent.map((a) => a.id),
+      [2]
     );
     assert.deepEqual(
       plan.remove.map((a) => a.id),

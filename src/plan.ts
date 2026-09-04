@@ -13,6 +13,7 @@ export interface PlanOptions {
   skipTags: boolean;
   taggedCommits: string[];
   skipRecent: number;
+  skipRecentCommits: number;
 }
 
 export interface Plan {
@@ -24,6 +25,8 @@ export interface Plan {
   unknownCommit: Artifact[];
   /** Kept because of skip-recent. */
   recent: Artifact[];
+  /** Kept because of skip-recent-commits. */
+  recentCommit: Artifact[];
   /** Kept because they are newer than maxAge. */
   kept: Artifact[];
   /** Kept because created_at is missing or unparsable. */
@@ -41,10 +44,12 @@ export function planCleanup(artifacts: Artifact[], options: PlanOptions): Plan {
     tagged: [],
     unknownCommit: [],
     recent: [],
+    recentCommit: [],
     kept: [],
     invalid: [],
   };
   const tagged = new Set(options.taggedCommits);
+  const recentCommits = new Set<string>();
   const maxAge = options.maxAge.valueOf();
 
   const dated: { artifact: Artifact; createdAt: number }[] = [];
@@ -77,7 +82,16 @@ export function planCleanup(artifacts: Artifact[], options: PlanOptions): Plan {
       }
     }
 
-    if (plan.recent.length < options.skipRecent) {
+    // The N most recent commits are the first N distinct commits seen, newest first.
+    const headSha = artifact.workflow_run?.head_sha;
+
+    if (headSha && recentCommits.size < options.skipRecentCommits) {
+      recentCommits.add(headSha);
+    }
+
+    if (headSha && recentCommits.has(headSha)) {
+      plan.recentCommit.push(artifact);
+    } else if (plan.recent.length < options.skipRecent) {
       plan.recent.push(artifact);
     } else if (createdAt < maxAge) {
       plan.remove.push(artifact);

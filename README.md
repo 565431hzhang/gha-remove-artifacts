@@ -11,7 +11,7 @@ Status and support
 GitHub Action Artifacts are removed after [90 days by default](https://docs.github.com/en/organizations/managing-organization-settings/configuring-the-retention-period-for-github-actions-artifacts-and-logs-in-your-organization), and the retention period is configurable. This action allows you to further customize the cleanup. It
 - removes artifacts that are older than the specified age
 - has the option to keep release (tagged) artifacts
-- has the option to keep a number of recent artifacts
+- has the option to keep a number of recent artifacts, or the artifacts of a number of recent commits
 - [respects](https://github.com/octokit/plugin-throttling.js) GitHub's rate limit, with a configurable retry cap
 
 Example use cases:
@@ -48,6 +48,7 @@ jobs:
         # Optional inputs
         # skip-tags: true
         # skip-recent: 5
+        # skip-recent-commits: 3
         # max-retries: 5
         # dry-run: true
 ```

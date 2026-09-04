@@ -121,13 +121,18 @@ async function startMockApi(onDelete: OnDelete, perPage = 2) {
 }
 
 // Must be async: a blocking spawn would starve the in-process mock API.
-async function runAction(apiUrl: string, inputs: Record<string, string>) {
+async function runAction(
+  apiUrl: string,
+  inputs: Record<string, string>,
+  extraEnv: Record<string, string> = {}
+) {
   const env: Record<string, string> = {
     PATH: process.env.PATH ?? "",
     GITHUB_API_URL: apiUrl,
     GITHUB_REPOSITORY: "owner/repo",
     GITHUB_ACTION: "test",
     INPUT_GITHUB_TOKEN: "token",
+    ...extraEnv,
   };
   for (const [name, value] of Object.entries(inputs)) {
     env[`INPUT_${name.toUpperCase()}`] = value;
@@ -186,6 +191,31 @@ describe("end to end", { timeout: 120_000 }, () => {
       assert.match(output, /\(id: 1, name: a1\): tagged, commit release/);
       assert.match(output, /\(id: 5, name: a5\): no commit information/);
       assert.match(output, /\(id: 3, name: a3\): recent/);
+    }));
+
+  it("keeps artifacts of recent commits with skip-recent-commits", () =>
+    withMockApi(ok, async (api) => {
+      const { status, output } = await runAction(api.url, {
+        age: "30 days",
+        "skip-recent-commits": "1",
+      });
+
+      assert.equal(status, 0, output);
+      // id 3 is the newest artifact and belongs to commit "x", as do ids 2 and 4.
+      assert.deepEqual(api.deleted.sort(), [1, 5]);
+      assert.match(output, /\(id: 2, name: a2\): recent commit x/);
+    }));
+
+  it("works when GITHUB_TOKEN is set both as input and env var", () =>
+    withMockApi(ok, async (api) => {
+      const { status, output } = await runAction(
+        api.url,
+        { age: "30 days", "dry-run": "true" },
+        { GITHUB_TOKEN: "env-token" }
+      );
+
+      assert.equal(status, 0, output);
+      assert.match(output, /Would have removed 4 artifacts/);
     }));
 
   it("deletes nothing in dry-run mode", () =>

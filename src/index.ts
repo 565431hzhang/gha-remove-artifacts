@@ -55,6 +55,7 @@ async function run(): Promise<void> {
       () => "no commit information, cannot tell whether it is tagged",
     ],
     [plan.recent, () => "recent"],
+    [plan.recentCommit, (a) => `recent commit ${a.workflow_run?.head_sha}`],
     [plan.invalid, () => "invalid created_at"],
   ];
 
@@ -96,11 +97,12 @@ async function run(): Promise<void> {
     }
   }
 
-  const skipped = plan.tagged.length + plan.unknownCommit.length;
+  const skippedTagged = plan.tagged.length + plan.unknownCommit.length;
+  const skippedRecent = plan.recent.length + plan.recentCommit.length;
 
   console.log(
     `Done. ${config.dryRun ? "Would have removed" : "Removed"} ${removed} artifacts. ` +
-      `Skipped ${skipped} tagged, ${plan.recent.length} recent, ` +
+      `Skipped ${skippedTagged} tagged, ${skippedRecent} recent, ` +
       `${plan.kept.length} newer than the maximum age, ${plan.invalid.length} invalid. ` +
       `Failed: ${failed}.`
   );

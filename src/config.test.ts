@@ -106,6 +106,7 @@ describe("getConfig", () => {
     assert.deepEqual(config.repo, { owner: "owner", repo: "repo" });
     assert.equal(config.skipTags, false);
     assert.equal(config.skipRecent, 0);
+    assert.equal(config.skipRecentCommits, 0);
     assert.equal(config.maxRetries, 5);
     assert.equal(config.dryRun, false);
   });
@@ -116,6 +117,7 @@ describe("getConfig", () => {
         age: "1 day",
         "skip-tags": "true",
         "skip-recent": "3",
+        "skip-recent-commits": "2",
         "max-retries": "0",
       }),
       "owner/repo"
@@ -123,6 +125,7 @@ describe("getConfig", () => {
 
     assert.equal(config.skipTags, true);
     assert.equal(config.skipRecent, 3);
+    assert.equal(config.skipRecentCommits, 2);
     assert.equal(config.maxRetries, 0);
   });
 
