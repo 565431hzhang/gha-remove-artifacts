@@ -1,0 +1,22 @@
+name: Remove old artifacts
+
+on:
+  schedule:
+    # 每天 UTC 1:00 执行
+    - cron: '0 1 * * *'
+
+  # 允许你在 GitHub Actions 页面手动执行
+  workflow_dispatch:
+
+jobs:
+  remove-old-artifacts:
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: write
+
+    steps:
+      - name: Remove old artifacts
+        uses: c-hive/gha-remove-artifacts@v1
+        with:
+          age: '7 days'
